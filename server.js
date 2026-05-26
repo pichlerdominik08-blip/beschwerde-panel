@@ -5,9 +5,6 @@ const mysql = require("mysql2");
 
 const app = express();
 
-// ======================
-// MIDDLEWARE
-// ======================
 app.use(express.urlencoded({ extended: true }));
 
 app.use(session({
@@ -24,7 +21,7 @@ const CLIENT_SECRET = "_tvGiwdTngoNYt0jzVqrsCR-7mLGjN9A";
 const REDIRECT_URI = "https://beschwerde-panel.onrender.com/callback";
 
 // ======================
-// DATABASE
+// DB
 // ======================
 const db = mysql.createConnection({
     host: "sql306.infinityfree.com",
@@ -35,67 +32,56 @@ const db = mysql.createConnection({
 });
 
 db.connect(err => {
-    if (err) console.log("DB Fehler:", err);
-    else console.log("MySQL verbunden");
+    if (err) console.log(err);
+    else console.log("DB verbunden");
 });
 
 // ======================
-// LOGIN PAGE (SCHÖN)
+// LOGIN PAGE (SCHÖN WIE PANEL)
 // ======================
 app.get("/", (req, res) => {
     res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <title>Login</title>
-
-    <style>
-        body {
-            margin:0;
-            font-family:Arial;
-            background:#0b1220;
-            color:white;
-            display:flex;
-            justify-content:center;
-            align-items:center;
-            height:100vh;
-        }
-
-        .box {
-            text-align:center;
-            background:rgba(255,255,255,0.05);
-            padding:40px;
-            border-radius:15px;
-            box-shadow:0 0 20px rgba(0,0,0,0.4);
-        }
-
-        a {
-            display:inline-block;
-            margin-top:20px;
-            padding:12px 20px;
-            background:#5865F2;
-            color:white;
-            text-decoration:none;
-            border-radius:8px;
-        }
-
-        a:hover {
-            background:#4752c4;
-        }
-    </style>
-
-    </head>
-
-    <body>
-
-    <div class="box">
-        <h1>📌 Beschwerde Panel</h1>
-        <p>Login mit Discord um fortzufahren</p>
-        <a href="/login">Mit Discord einloggen</a>
-    </div>
-
-    </body>
-    </html>
+<!DOCTYPE html>
+<html>
+<head>
+<title>Login</title>
+<style>
+body{
+margin:0;
+background:#0b1220;
+color:white;
+font-family:Arial;
+display:flex;
+justify-content:center;
+align-items:center;
+height:100vh;
+}
+.box{
+background:#111827;
+padding:40px;
+border-radius:15px;
+text-align:center;
+}
+a{
+background:#5865F2;
+padding:12px 20px;
+color:white;
+text-decoration:none;
+border-radius:8px;
+display:inline-block;
+margin-top:15px;
+}
+a:hover{background:#4752c4;}
+</style>
+</head>
+<body>
+<div class="box">
+<h1>📌 Beschwerde Panel</h1>
+<p>Login mit Discord</p>
+<a href="/login">Einloggen</a>
+</div>
+</body>
+</html>
     `);
 });
 
@@ -121,9 +107,9 @@ app.get("/callback", async (req, res) => {
                 grant_type: "authorization_code",
                 code,
                 redirect_uri: REDIRECT_URI
-            }), {
-            headers: { "Content-Type": "application/x-www-form-urlencoded" }
-        });
+            }),
+            { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+        );
 
         const user = await axios.get("https://discord.com/api/users/@me", {
             headers: {
@@ -131,8 +117,13 @@ app.get("/callback", async (req, res) => {
             }
         });
 
-        req.session.user = user.data;
+        // USER IN DB SPEICHERN / ROLE MEMBER DEFAULT
+        db.query(
+            "INSERT IGNORE INTO users (discord_id, username, avatar, role) VALUES (?, ?, ?, 'member')",
+            [user.data.id, user.data.username, user.data.avatar]
+        );
 
+        req.session.user = user.data;
         res.redirect("/dashboard");
 
     } catch (err) {
@@ -142,132 +133,66 @@ app.get("/callback", async (req, res) => {
 });
 
 // ======================
-// DASHBOARD (DESIGN WIE PANEL)
+// DASHBOARD (CLEAN PANEL DESIGN)
 // ======================
 app.get("/dashboard", (req, res) => {
     if (!req.session.user) return res.redirect("/");
 
     res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <title>Dashboard</title>
+<!DOCTYPE html>
+<html>
+<head>
+<title>Dashboard</title>
 
-    <style>
-        body {
-            margin:0;
-            font-family:Arial;
-            background:#0b1220;
-            color:white;
-            display:flex;
-        }
+<style>
+body{margin:0;font-family:Arial;background:#0b1220;color:white;display:flex;}
+.sidebar{width:250px;height:100vh;background:#111827;padding:20px;}
+.sidebar h2{color:#5865F2;}
+.sidebar a{display:block;color:white;text-decoration:none;margin:10px 0;padding:8px;border-radius:6px;}
+.sidebar a:hover{background:#1f2937;}
+.main{flex:1;padding:30px;}
+.card{background:#111827;padding:20px;border-radius:12px;margin-bottom:20px;}
+input,textarea{width:100%;padding:10px;margin:10px 0;background:#1f2937;color:white;border:none;border-radius:6px;}
+button{background:#5865F2;color:white;padding:10px;border:none;border-radius:6px;cursor:pointer;}
+button:hover{background:#4752c4;}
+</style>
 
-        .sidebar {
-            width:250px;
-            height:100vh;
-            background:#111827;
-            padding:20px;
-        }
+</head>
+<body>
 
-        .sidebar h2 {
-            color:#5865F2;
-        }
+<div class="sidebar">
+<h2>Panel</h2>
+<p>${req.session.user.username}</p>
+<a href="/dashboard">Dashboard</a>
+<a href="/complaints">Beschwerden</a>
+</div>
 
-        .sidebar a {
-            display:block;
-            color:white;
-            text-decoration:none;
-            margin:10px 0;
-            padding:8px;
-            border-radius:6px;
-        }
+<div class="main">
 
-        .sidebar a:hover {
-            background:#1f2937;
-        }
+<div class="card">
+<h2>Willkommen ${req.session.user.username}</h2>
+</div>
 
-        .main {
-            flex:1;
-            padding:30px;
-        }
+<div class="card">
+<h2>Beschwerde erstellen</h2>
 
-        .card {
-            background:rgba(255,255,255,0.05);
-            padding:20px;
-            border-radius:12px;
-            margin-bottom:20px;
-        }
+<form method="POST" action="/create-complaint">
 
-        input, textarea {
-            width:100%;
-            padding:10px;
-            margin-top:8px;
-            margin-bottom:12px;
-            border:none;
-            border-radius:6px;
-            background:#1f2937;
-            color:white;
-        }
+<input name="title" placeholder="Titel" required>
 
-        button {
-            background:#5865F2;
-            color:white;
-            padding:10px 15px;
-            border:none;
-            border-radius:6px;
-            cursor:pointer;
-        }
+<input name="target_user" placeholder="Gegen wen (Discord Name)" required>
 
-        button:hover {
-            background:#4752c4;
-        }
+<textarea name="description" placeholder="Beschreibung" required></textarea>
 
-        .avatar {
-            border-radius:50%;
-        }
-    </style>
+<button type="submit">Senden</button>
 
-    </head>
+</form>
 
-    <body>
+</div>
 
-    <div class="sidebar">
-        <h2>📌 Panel</h2>
-        <p>👤 ${req.session.user.username}</p>
-
-        <a href="/dashboard">🏠 Dashboard</a>
-        <a href="/complaints">📋 Beschwerden</a>
-    </div>
-
-    <div class="main">
-
-        <div class="card">
-            <h2>Willkommen ${req.session.user.username}</h2>
-            <img class="avatar"
-            src="https://cdn.discordapp.com/avatars/${req.session.user.id}/${req.session.user.avatar}.png"
-            width="80">
-        </div>
-
-        <div class="card">
-            <h2>Beschwerde erstellen</h2>
-
-            <form method="POST" action="/create-complaint">
-
-                <input name="title" placeholder="Titel" required>
-
-                <input name="target_user" placeholder="Gegen wen (Discord Name)" required>
-
-                <textarea name="description" placeholder="Beschreibung" required></textarea>
-
-                <button type="submit">Senden</button>
-
-            </form>
-        </div>
-
-    </div>
-
-    </body>
-    </html>
+</div>
+</body>
+</html>
     `);
 });
 
@@ -284,14 +209,18 @@ app.post("/create-complaint", (req, res) => {
         "INSERT INTO complaints (user_id, title, description, target_user, status) VALUES (?, ?, ?, ?, 'offen')",
         [req.session.user.id, title, description, target_user],
         (err) => {
-            if (err) return res.send("Fehler");
-            res.send("Beschwerde erstellt!");
+            if (err) {
+                console.log(err);
+                return res.send("Fehler");
+            }
+
+            res.redirect("/complaints");
         }
     );
 });
 
 // ======================
-// COMPLAINTS LIST
+// COMPLAINTS PAGE
 // ======================
 app.get("/complaints", (req, res) => {
 
@@ -300,21 +229,33 @@ app.get("/complaints", (req, res) => {
     db.query("SELECT * FROM complaints ORDER BY id DESC", (err, rows) => {
 
         let html = `
-        <body style="background:#0b1220;color:white;font-family:Arial;padding:20px">
-        <h1>📋 Beschwerden</h1>
-        `;
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body{background:#0b1220;color:white;font-family:Arial;padding:20px;}
+.box{background:#111827;padding:15px;margin:10px;border-radius:10px;}
+a{color:#5865F2;}
+</style>
+</head>
+<body>
+
+<h1>Beschwerden</h1>
+<a href="/dashboard">Zurück</a>
+`;
 
         rows.forEach(c => {
             html += `
-            <div style="background:#111827;padding:15px;margin:10px;border-radius:10px">
+            <div class="box">
                 <b>Titel:</b> ${c.title}<br>
                 <b>Gegen:</b> ${c.target_user}<br>
-                <b>Status:</b> ${c.status}
+                <b>Status:</b> ${c.status}<br>
+                <p>${c.description}</p>
             </div>
             `;
         });
 
-        html += `</body>`;
+        html += `</body></html>`;
         res.send(html);
     });
 });
