@@ -89,8 +89,14 @@ a:hover{background:#4752c4;}
 // DISCORD LOGIN
 // ======================
 app.get("/login", (req, res) => {
-    const url = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify`;
-    res.redirect(url);
+    const params = new URLSearchParams({
+        client_id: CLIENT_ID,
+        redirect_uri: REDIRECT_URI,
+        response_type: "code",
+        scope: "identify"
+    });
+
+    res.redirect(`https://discord.com/oauth2/authorize?${params.toString()}`);
 });
 
 // ======================
