@@ -6,11 +6,11 @@ const mysql = require("mysql2");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ================= DISCORD CONFIG =================
+// ================= DISCORD =================
 
-const CLIENT_ID = "1508836298713206876";
-const CLIENT_SECRET = "_tvGiwdTngoNYt0jzVqrsCR-7mLGjN9A";
-const REDIRECT_URI = "https://DEINE-APP.onrender.com/callback";
+const CLIENT_ID = "1455173278376136788";
+const CLIENT_SECRET = "U3iGnMV0TcVqiBvWmf1GNzGybg-aXiqd";
+const REDIRECT_URI = "https://beschwerde-panel.onrender.com/callback";
 
 // ================= MIDDLEWARE =================
 
@@ -22,7 +22,7 @@ app.use(session({
     saveUninitialized: false
 }));
 
-// ================= MYSQL (RAILWAY) =================
+// ================= MYSQL =================
 
 const db = mysql.createConnection({
     host: "yamanote.proxy.rlwy.net",
@@ -32,12 +32,7 @@ const db = mysql.createConnection({
     port: 3306
 });
 
-db.connect(err => {
-    if (err) console.log("MYSQL FEHLER:", err);
-    else console.log("MYSQL VERBUNDEN");
-});
-
-// ================= AUTO TABLES =================
+// ================= TABLES =================
 
 db.query(`
 CREATE TABLE IF NOT EXISTS users (
@@ -62,32 +57,116 @@ taken_by VARCHAR(255)
 // ================= AUTH =================
 
 function auth(req,res,next){
-    if(!req.session.user) return res.redirect("/");
-    next();
+if(!req.session.user) return res.redirect("/");
+next();
 }
 
-// ================= DESIGN =================
+// ================= MODERN DESIGN =================
 
 const css = `
 <style>
-body{margin:0;font-family:Arial;background:#0b1020;color:white;}
+body{
+margin:0;
+font-family:Inter,Arial;
+background:#0b1020;
+color:white;
+}
 
-.login{display:flex;justify-content:center;align-items:center;height:100vh;}
-.box{background:#111827;padding:40px;border-radius:18px;width:350px;text-align:center;border:1px solid #1f2a44;}
+/* LOGIN */
+.login{
+display:flex;
+justify-content:center;
+align-items:center;
+height:100vh;
+}
 
-.btn{display:inline-block;padding:12px 18px;background:#6d5dfc;color:white;border-radius:10px;text-decoration:none;margin-top:15px;}
+.loginBox{
+background:#111827;
+padding:40px;
+border-radius:18px;
+width:350px;
+text-align:center;
+border:1px solid #1f2a44;
+}
 
-.container{display:flex;min-height:100vh;}
+.btn{
+display:inline-block;
+padding:12px 18px;
+background:#6d5dfc;
+color:white;
+border-radius:10px;
+text-decoration:none;
+margin-top:15px;
+}
 
-.sidebar{width:220px;background:#111827;padding:20px;border-right:1px solid #1f2a44;}
-.sidebar a{display:block;color:white;text-decoration:none;padding:10px;border-radius:8px;margin-bottom:6px;}
-.sidebar a:hover{background:#6d5dfc;}
+/* LAYOUT */
+.container{
+display:flex;
+min-height:100vh;
+}
 
-.content{flex:1;padding:20px;}
+/* SIDEBAR */
+.sidebar{
+width:240px;
+background:#111827;
+padding:20px;
+border-right:1px solid #1f2a44;
+}
 
-.card{background:#111827;padding:15px;margin:10px;border-radius:12px;border:1px solid #1f2a44;}
+.logo{
+font-size:20px;
+font-weight:bold;
+margin-bottom:20px;
+color:#6d5dfc;
+}
 
-.status{padding:5px 10px;border-radius:6px;display:inline-block;margin-top:8px;}
+.sidebar a{
+display:block;
+padding:12px;
+color:white;
+text-decoration:none;
+border-radius:8px;
+margin-bottom:8px;
+}
+
+.sidebar a:hover{
+background:#6d5dfc;
+}
+
+/* CONTENT */
+.content{
+flex:1;
+padding:25px;
+}
+
+.title{
+font-size:32px;
+margin-bottom:20px;
+}
+
+/* CARD STYLE (wie SaaS Panel) */
+.card{
+background:#111827;
+border:1px solid #1f2a44;
+padding:18px;
+border-radius:16px;
+margin-bottom:12px;
+transition:.2s;
+}
+
+.card:hover{
+transform:translateY(-3px);
+}
+
+/* STATUS */
+.status{
+display:inline-block;
+padding:5px 10px;
+border-radius:6px;
+font-size:12px;
+margin-top:8px;
+}
+
 .offen{background:#fbbf2420;color:#fbbf24;}
 .angenommen{background:#22c55e20;color:#22c55e;}
 .abgelehnt{background:#ef444420;color:#ef4444;}
@@ -98,15 +177,20 @@ body{margin:0;font-family:Arial;background:#0b1020;color:white;}
 
 app.get("/", (req,res)=>{
 res.send(`
-<html><head>${css}</head><body>
+<html>
+<head>${css}</head>
+<body>
+
 <div class="login">
-<div class="box">
+<div class="loginBox">
 <h2>Beschwerde Panel</h2>
 <p>Login mit Discord</p>
 <a class="btn" href="/login">Login</a>
 </div>
 </div>
-</body></html>
+
+</body>
+</html>
 `);
 });
 
@@ -127,11 +211,10 @@ res.redirect("https://discord.com/oauth2/authorize?"+params);
 app.get("/callback", async (req,res)=>{
 
 const code = req.query.code;
-if(!code) return res.send("No Code");
 
 try {
 
-const tokenRes = await axios.post(
+const token = await axios.post(
 "https://discord.com/api/oauth2/token",
 new URLSearchParams({
 client_id: CLIENT_ID,
@@ -145,22 +228,22 @@ redirect_uri: REDIRECT_URI
 
 const userRes = await axios.get(
 "https://discord.com/api/users/@me",
-{headers:{Authorization:`Bearer ${tokenRes.data.access_token}`}}
+{headers:{Authorization:`Bearer ${token.data.access_token}`}}
 );
 
 const user = userRes.data;
 
-// insert user
+// SAVE USER
 db.query(
 "INSERT IGNORE INTO users (discord_id,username,avatar) VALUES (?,?,?)",
 [user.id,user.username,user.avatar]
 );
 
-// role logic
+// ROLE SYSTEM
 db.query("SELECT * FROM users",(err,rows)=>{
 
 let role = "member";
-if(rows.length === 0) role = "leitung";
+if(rows.length === 1) role = "leitung";
 
 db.query(
 "UPDATE users SET role=? WHERE discord_id=?",
@@ -200,9 +283,11 @@ html += `
 <p>Target: ${c.target_user}</p>
 <p>By: ${c.taken_by || "-"}</p>
 
-<div class="status ${c.status}">${c.status}</div>
-<br>
+<div class="status ${c.status}">
+${c.status}
+</div>
 
+<br>
 <a href="/take/${c.id}">Take</a> |
 <a href="/accept/${c.id}">Accept</a> |
 <a href="/reject/${c.id}">Reject</a>
@@ -211,25 +296,28 @@ html += `
 });
 
 res.send(`
-<html><head>${css}</head><body>
+<html>
+<head>${css}</head>
+<body>
 
 <div class="container">
 
 <div class="sidebar">
-<h3>Menu</h3>
+<div class="logo">Panel</div>
 <a href="/dashboard">Dashboard</a>
 <a href="/create">Create</a>
 <a href="/logout">Logout</a>
 </div>
 
 <div class="content">
-<h1>Dashboard</h1>
+<div class="title">Dashboard</div>
 ${html}
 </div>
 
 </div>
 
-</body></html>
+</body>
+</html>
 `);
 });
 
@@ -239,23 +327,26 @@ ${html}
 
 app.get("/create",auth,(req,res)=>{
 res.send(`
-<html><head>${css}</head><body>
+<html>
+<head>${css}</head>
+<body>
 
 <div class="login">
-<div class="box">
-<h2>Create Complaint</h2>
+<div class="loginBox">
+<h2>Neue Beschwerde</h2>
 
 <form method="POST">
-<input name="title" placeholder="Title"><br><br>
-<input name="target_user" placeholder="Target"><br><br>
+<input name="title" placeholder="Titel"><br><br>
+<input name="target_user" placeholder="Gegen wen"><br><br>
 <textarea name="description"></textarea><br><br>
-<button class="btn">Send</button>
+<button class="btn">Senden</button>
 </form>
 
 </div>
 </div>
 
-</body></html>
+</body>
+</html>
 `);
 });
 
