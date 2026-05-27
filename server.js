@@ -6,12 +6,12 @@ const mysql = require("mysql2");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-/* ================= CRASH PROTECTION ================= */
+/* ================= SAFETY ================= */
 process.on("uncaughtException", (err) => {
     console.log("CRASH:", err);
 });
 
-/* ================= DISCORD CONFIG ================= */
+/* ================= DISCORD ================= */
 
 const CLIENT_ID = "1455173278376136788";
 const CLIENT_SECRET = "U3iGnMV0TcVqiBvWmf1GNzGybg-aXiqd";
@@ -22,7 +22,7 @@ const REDIRECT_URI = "https://beschwerde-panel.onrender.com/callback";
 app.use(express.urlencoded({ extended: true }));
 
 app.use(session({
-    secret: "supersecret",
+    secret: "secret123",
     resave: false,
     saveUninitialized: false
 }));
@@ -37,16 +37,6 @@ const db = mysql.createPool({
     port: 3306,
     waitForConnections: true,
     connectionLimit: 10
-});
-
-/* TEST CONNECTION (NO CRASH) */
-db.getConnection((err, conn) => {
-    if (err) {
-        console.log("MYSQL ERROR:", err.message);
-    } else {
-        console.log("MYSQL CONNECTED");
-        conn.release();
-    }
 });
 
 /* ================= TABLES ================= */
@@ -85,7 +75,7 @@ const css = `
 body{margin:0;font-family:Arial;background:#0b1020;color:white;}
 
 .login{display:flex;justify-content:center;align-items:center;height:100vh;}
-.box{background:#111827;padding:40px;border-radius:18px;width:350px;text-align:center;border:1px solid #1f2a44;}
+.box{background:#111827;padding:40px;border-radius:16px;width:340px;text-align:center;border:1px solid #1f2a44;}
 
 .btn{display:inline-block;padding:12px 18px;background:#6d5dfc;color:white;border-radius:10px;text-decoration:none;margin-top:15px;}
 
@@ -97,9 +87,9 @@ body{margin:0;font-family:Arial;background:#0b1020;color:white;}
 
 .content{flex:1;padding:25px;}
 
-.card{background:#111827;padding:15px;margin-bottom:12px;border-radius:14px;border:1px solid #1f2a44;}
+.card{background:#111827;padding:15px;margin-bottom:12px;border-radius:12px;border:1px solid #1f2a44;}
 
-.status{padding:4px 8px;border-radius:6px;display:inline-block;margin-top:6px;font-size:12px;}
+.status{padding:4px 8px;border-radius:6px;font-size:12px;display:inline-block;margin-top:6px;}
 .offen{background:#fbbf2420;color:#fbbf24;}
 .angenommen{background:#22c55e20;color:#22c55e;}
 .abgelehnt{background:#ef444420;color:#ef4444;}
@@ -108,7 +98,7 @@ body{margin:0;font-family:Arial;background:#0b1020;color:white;}
 
 /* ================= HOME ================= */
 
-app.get("/", (req, res) => {
+app.get("/", (req,res)=>{
 res.send(`
 <html><head>${css}</head>
 <body>
@@ -124,20 +114,23 @@ res.send(`
 
 /* ================= LOGIN ================= */
 
-app.get("/login", (req, res) => {
-const url = `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify`;
+app.get("/login", (req,res)=>{
+const url =
+`https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=identify`;
+
 res.redirect(url);
 });
 
-/* ================= CALLBACK (SAFE) ================= */
+/* ================= CALLBACK (FAST + NO HANG) ================= */
 
-app.get("/callback", async (req, res) => {
+app.get("/callback", async (req,res)=>{
 
 const code = req.query.code;
-if (!code) return res.send("No Code");
+if(!code) return res.send("No Code");
 
 try {
 
+// STEP 1 TOKEN
 const token = await axios.post(
 "https://discord.com/api/oauth2/token",
 new URLSearchParams({
@@ -150,6 +143,7 @@ redirect_uri: REDIRECT_URI
 { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
 );
 
+// STEP 2 USER
 const userRes = await axios.get(
 "https://discord.com/api/users/@me",
 {
@@ -161,17 +155,24 @@ Authorization: `Bearer ${token.data.access_token}`
 
 const user = userRes.data;
 
-/* INSERT USER */
+// STEP 3 DB INSERT (ASYNC SAFE)
 db.query(
 "INSERT IGNORE INTO users (discord_id, username, avatar) VALUES (?,?,?)",
 [user.id, user.username, user.avatar]
 );
 
-/* ROLE SYSTEM */
-db.query("SELECT * FROM users", (err, rows) => {
+// STEP 4 ROLE
+db.query(
+"SELECT role FROM users WHERE discord_id=?",
+[user.id],
+(err, rows) => {
 
-let role = "member";
-if (rows.length === 1) role = "leitung";
+let role = rows?.[0]?.role || "member";
+
+// FIRST USER = LEITUNG
+db.query("SELECT COUNT(*) AS c FROM users", (e2, r2) => {
+
+if (r2[0].c === 1) role = "leitung";
 
 db.query(
 "UPDATE users SET role=? WHERE discord_id=?",
@@ -184,26 +185,29 @@ username: user.username,
 role
 };
 
-res.redirect("/dashboard");
+// IMPORTANT: FAST RESPONSE
+return res.redirect("/dashboard");
 
 });
 
-} catch (err) {
+});
+
+} catch(err){
 console.log("LOGIN ERROR:", err.response?.data || err);
-res.send("Login Fehler (siehe Logs)");
+res.send("Login Fehler (check logs)");
 }
 
 });
 
 /* ================= DASHBOARD ================= */
 
-app.get("/dashboard", auth, (req, res) => {
+app.get("/dashboard", auth, (req,res)=>{
 
-db.query("SELECT * FROM complaints ORDER BY id DESC", (err, rows) => {
+db.query("SELECT * FROM complaints ORDER BY id DESC",(err,rows)=>{
 
 let html = "";
 
-rows.forEach(c => {
+rows.forEach(c=>{
 html += `
 <div class="card">
 <h3>${c.title}</h3>
@@ -211,7 +215,11 @@ html += `
 <p>Target: ${c.target_user}</p>
 <p>By: ${c.taken_by || "-"}</p>
 
-<div class="status ${c.status}">${c.status}</div><br>
+<div class="status ${c.status}">
+${c.status}
+</div>
+
+<br>
 
 <a href="/take/${c.id}">Take</a> |
 <a href="/accept/${c.id}">Accept</a> |
@@ -221,7 +229,8 @@ html += `
 });
 
 res.send(`
-<html><head>${css}</head><body>
+<html><head>${css}</head>
+<body>
 
 <div class="container">
 
@@ -247,29 +256,28 @@ ${html}
 
 /* ================= CREATE ================= */
 
-app.get("/create", auth, (req, res) => {
+app.get("/create", auth, (req,res)=>{
 res.send(`
-<html><head>${css}</head><body>
-
+<html><head>${css}</head>
+<body>
 <div class="login">
 <div class="box">
 <h2>Neue Beschwerde</h2>
 
 <form method="POST">
 <input name="title" placeholder="Titel"><br><br>
-<input name="target_user" placeholder="Gegen wen"><br><br>
+<input name="target_user" placeholder="Target"><br><br>
 <textarea name="description"></textarea><br><br>
 <button class="btn">Senden</button>
 </form>
 
 </div>
 </div>
-
 </body></html>
 `);
 });
 
-app.post("/create", auth, (req, res) => {
+app.post("/create", auth, (req,res)=>{
 db.query(
 "INSERT INTO complaints (user_id,title,description,target_user) VALUES (?,?,?,?)",
 [req.session.user.id, req.body.title, req.body.description, req.body.target_user]
@@ -279,29 +287,29 @@ res.redirect("/dashboard");
 
 /* ================= ACTIONS ================= */
 
-app.get("/take/:id", auth, (req, res) => {
-db.query("UPDATE complaints SET taken_by=? WHERE id=?", [req.session.user.username, req.params.id]);
+app.get("/take/:id", auth,(req,res)=>{
+db.query("UPDATE complaints SET taken_by=? WHERE id=?",[req.session.user.username,req.params.id]);
 res.redirect("/dashboard");
 });
 
-app.get("/accept/:id", auth, (req, res) => {
-db.query("UPDATE complaints SET status='angenommen' WHERE id=?", [req.params.id]);
+app.get("/accept/:id", auth,(req,res)=>{
+db.query("UPDATE complaints SET status='angenommen' WHERE id=?",[req.params.id]);
 res.redirect("/dashboard");
 });
 
-app.get("/reject/:id", auth, (req, res) => {
-db.query("UPDATE complaints SET status='abgelehnt' WHERE id=?", [req.params.id]);
+app.get("/reject/:id", auth,(req,res)=>{
+db.query("UPDATE complaints SET status='abgelehnt' WHERE id=?",[req.params.id]);
 res.redirect("/dashboard");
 });
 
 /* ================= LOGOUT ================= */
 
-app.get("/logout", (req, res) => {
-req.session.destroy(() => res.redirect("/"));
+app.get("/logout",(req,res)=>{
+req.session.destroy(()=>res.redirect("/"));
 });
 
 /* ================= START ================= */
 
-app.listen(PORT, () => {
+app.listen(PORT, ()=>{
 console.log("Server läuft auf Port " + PORT);
 });
