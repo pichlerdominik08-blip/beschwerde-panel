@@ -13,9 +13,9 @@ const app = express();
 
 const PORT = process.env.PORT || 3000;
 
-const CLIENT_ID = process.env.CLIENT_ID;
-const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const REDIRECT_URI = process.env.REDIRECT_URI;
+const CLIENT_ID = "1508836298713206876"; 
+const CLIENT_SECRET = "_tvGiwdTngoNYt0jzVqrsCR-7mLGjN9A"; 
+const REDIRECT_URI = "https://beschwerde-panel.onrender.com/callback";
 
 app.use(express.urlencoded({ extended: true }));
 
@@ -32,11 +32,11 @@ app.use(session({
 // MYSQL
 // ======================
 
-const db = mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
+const db = mysql.createConnection({ 
+    host: "sql306.infinityfree.com", 
+    user: "if0_42025033", 
+    password: "budQIQWw1u", 
+    database: "if0_42025033_panel", 
     port: 3306
 });
 
