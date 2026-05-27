@@ -7,22 +7,25 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ================= CONFIG =================
+
 const CLIENT_ID = "1508836298713206876"; 
 const CLIENT_SECRET = "_tvGiwdTngoNYt0jzVqrsCR-7mLGjN9A"; 
 const REDIRECT_URI = "https://beschwerde-panel.onrender.com/callback"; 
 
 // ================= MIDDLEWARE =================
+
 app.use(express.urlencoded({ extended: true }));
 
 app.use(session({
-    secret: process.env.SESSION_SECRET || "secret",
+    secret: "secret",
     resave: false,
     saveUninitialized: false
 }));
 
 // ================= DB =================
+
 const db = mysql.createConnection({ 
-   host: "sql306.infinityfree.com", 
+   host: "sql306.infinityfree.com",
    user: "if0_42025033", 
    password: "budQIQWw1u", 
    database: "if0_42025033_panel", 
@@ -35,6 +38,7 @@ db.connect(err => {
 });
 
 // ================= TABLES =================
+
 db.query(`
 CREATE TABLE IF NOT EXISTS users (
 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -42,7 +46,8 @@ discord_id VARCHAR(255) UNIQUE,
 username VARCHAR(255),
 avatar TEXT,
 role VARCHAR(50) DEFAULT 'member'
-)`);
+)
+`);
 
 db.query(`
 CREATE TABLE IF NOT EXISTS complaints (
@@ -53,24 +58,291 @@ description TEXT,
 target_user TEXT,
 status VARCHAR(50) DEFAULT 'offen',
 taken_by VARCHAR(255) DEFAULT NULL
-)`);
+)
+`);
 
 // ================= AUTH =================
+
 function auth(req,res,next){
     if(!req.session.user) return res.redirect("/");
     next();
 }
 
+// ================= CSS =================
+
+const css = `
+<style>
+
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:Inter,sans-serif;
+}
+
+body{
+background:#060b23;
+color:white;
+overflow-x:hidden;
+}
+
+/* LOGIN */
+
+.login-page{
+display:flex;
+justify-content:center;
+align-items:center;
+height:100vh;
+}
+
+.login-box{
+width:450px;
+background:#101935;
+padding:40px;
+border-radius:24px;
+border:1px solid #1f2b50;
+box-shadow:0 0 40px rgba(0,0,0,.4);
+}
+
+.logo{
+font-size:32px;
+font-weight:700;
+margin-bottom:40px;
+color:#7c5cff;
+}
+
+.login-title{
+font-size:42px;
+font-weight:700;
+margin-bottom:15px;
+}
+
+.login-sub{
+color:#94a3b8;
+margin-bottom:35px;
+line-height:1.5;
+}
+
+.btn{
+display:inline-block;
+padding:15px 20px;
+border-radius:14px;
+background:#6d5dfc;
+color:white;
+text-decoration:none;
+border:none;
+cursor:pointer;
+transition:.2s;
+font-weight:600;
+}
+
+.btn:hover{
+transform:translateY(-2px);
+opacity:.9;
+}
+
+.btn.full{
+width:100%;
+text-align:center;
+}
+
+.container{
+display:flex;
+min-height:100vh;
+}
+
+/* SIDEBAR */
+
+.sidebar{
+width:260px;
+background:#101935;
+padding:30px 20px;
+border-right:1px solid #1f2b50;
+}
+
+.sidebar .logo{
+margin-bottom:50px;
+}
+
+.nav a{
+display:block;
+padding:15px;
+border-radius:14px;
+margin-bottom:10px;
+text-decoration:none;
+color:#cbd5e1;
+transition:.2s;
+font-weight:500;
+}
+
+.nav a:hover{
+background:#6d5dfc;
+color:white;
+}
+
+/* CONTENT */
+
+.content{
+flex:1;
+padding:50px;
+}
+
+.header{
+margin-bottom:40px;
+}
+
+.header h1{
+font-size:48px;
+margin-bottom:10px;
+}
+
+.header p{
+color:#94a3b8;
+font-size:18px;
+}
+
+/* CARDS */
+
+.cards{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(350px,1fr));
+gap:25px;
+}
+
+.card{
+background:#101935;
+border:1px solid #1f2b50;
+border-radius:24px;
+padding:25px;
+transition:.2s;
+}
+
+.card:hover{
+transform:translateY(-3px);
+}
+
+.card h2{
+font-size:24px;
+margin-bottom:15px;
+}
+
+.card p{
+color:#cbd5e1;
+line-height:1.6;
+}
+
+.small{
+margin-top:10px;
+font-size:14px;
+color:#94a3b8;
+}
+
+/* STATUS */
+
+.status{
+display:inline-block;
+padding:8px 16px;
+border-radius:999px;
+margin-top:18px;
+font-size:14px;
+font-weight:600;
+}
+
+.offen{
+background:#f59e0b20;
+color:#fbbf24;
+}
+
+.angenommen{
+background:#10b98120;
+color:#34d399;
+}
+
+.abgelehnt{
+background:#ef444420;
+color:#f87171;
+}
+
+/* FORM */
+
+.form-box{
+max-width:600px;
+background:#101935;
+padding:40px;
+border-radius:24px;
+border:1px solid #1f2b50;
+}
+
+.input{
+width:100%;
+padding:16px;
+margin-bottom:20px;
+border:none;
+border-radius:14px;
+background:#0b122b;
+color:white;
+font-size:15px;
+}
+
+textarea{
+resize:none;
+height:180px;
+}
+
+.actions{
+margin-top:20px;
+display:flex;
+gap:10px;
+flex-wrap:wrap;
+}
+
+</style>
+`;
+
 // ================= HOME =================
+
 app.get("/", (req,res)=>{
+
 res.send(`
-<h1>Discord Panel</h1>
-<a href="/login">Login</a>
+<html>
+<head>
+<title>Login</title>
+${css}
+</head>
+<body>
+
+<div class="login-page">
+
+<div class="login-box">
+
+<div class="logo">TeamPanel</div>
+
+<div class="login-title">
+Willkommen zurück
+</div>
+
+<div class="login-sub">
+Melde dich an um auf das Team Panel zuzugreifen.
+</div>
+
+<a class="btn full" href="/login">
+Jetzt einloggen
+</a>
+
+</div>
+
+</div>
+
+</body>
+</html>
 `);
+
 });
 
 // ================= LOGIN =================
+
 app.get("/login",(req,res)=>{
+
 const params = new URLSearchParams({
 client_id: CLIENT_ID,
 redirect_uri: REDIRECT_URI,
@@ -78,17 +350,23 @@ response_type:"code",
 scope:"identify"
 });
 
-res.redirect("https://discord.com/oauth2/authorize?"+params);
+res.redirect(
+"https://discord.com/oauth2/authorize?"+params
+);
+
 });
 
 // ================= CALLBACK =================
+
 app.get("/callback", async (req,res)=>{
+
 const code = req.query.code;
 
 try {
 
 const token = await axios.post(
 "https://discord.com/api/oauth2/token",
+
 new URLSearchParams({
 client_id: CLIENT_ID,
 client_secret: CLIENT_SECRET,
@@ -96,191 +374,437 @@ grant_type:"authorization_code",
 code,
 redirect_uri: REDIRECT_URI
 }),
-{ headers:{ "Content-Type":"application/x-www-form-urlencoded" } }
+
+{
+headers:{
+"Content-Type":"application/x-www-form-urlencoded"
+}
+}
 );
 
 const userRes = await axios.get(
 "https://discord.com/api/users/@me",
-{ headers:{ Authorization:`Bearer ${token.data.access_token}` } }
+{
+headers:{
+Authorization:`Bearer ${token.data.access_token}`
+}
+}
 );
 
 const user = userRes.data;
 
-// USER IN DB
+// USER SAVE
+
 db.query(
-"INSERT IGNORE INTO users (discord_id, username, avatar) VALUES (?,?,?)",
+"INSERT IGNORE INTO users (discord_id,username,avatar) VALUES (?,?,?)",
 [user.id,user.username,user.avatar]
 );
 
-// ROLE CHECK / FIRST USER = LEITUNG
+// FIRST USER = LEITUNG
+
 db.query("SELECT * FROM users",(err,rows)=>{
 
-let role = "member";
-
-// 🔥 erster User im System wird Leitung
-if(rows.length === 0){
-role = "leitung";
+if(rows.length === 1){
 
 db.query(
 "UPDATE users SET role='leitung' WHERE discord_id=?",
 [user.id]
 );
+
 }
 
 db.query(
 "SELECT role FROM users WHERE discord_id=?",
 [user.id],
+
 (err2,roleRows)=>{
 
 req.session.user = {
 id:user.id,
 username:user.username,
 avatar:user.avatar,
-role: roleRows[0]?.role || role
+role:roleRows[0]?.role || "member"
 };
 
 res.redirect("/dashboard");
+
 });
 
 });
 
 } catch(err){
+
 console.log(err);
 res.send("Login Fehler");
+
 }
+
 });
 
 // ================= DASHBOARD =================
-app.get("/dashboard",auth,(req,res)=>{
+
+app.get("/dashboard", auth, (req,res)=>{
 
 let sql = "";
 
 if(req.session.user.role === "member"){
-sql = "WHERE user_id='"+req.session.user.id+"'";
+sql = `WHERE user_id='${req.session.user.id}'`;
 }
 
-db.query("SELECT * FROM complaints "+sql+" ORDER BY id DESC",(err,rows)=>{
+db.query(
+"SELECT * FROM complaints "+sql+" ORDER BY id DESC",
 
-let html = "";
+(err,rows)=>{
+
+let cards = "";
 
 rows.forEach(c=>{
-html += `
-<div style="background:#1f2937;padding:10px;margin:10px;border-radius:8px;">
-<h3>${c.title}</h3>
+
+cards += `
+
+<div class="card">
+
+<h2>${c.title}</h2>
+
 <p>${c.description}</p>
-<p>Status: ${c.status}</p>
-<p>Übernommen von: ${c.taken_by || "niemand"}</p>
+
+<div class="small">
+Gegen: ${c.target_user}
+</div>
+
+<div class="small">
+Übernommen von:
+${c.taken_by || "Niemand"}
+</div>
+
+<div class="status ${c.status}">
+${c.status}
+</div>
 
 ${
 req.session.user.role !== "member"
-? `<a href="/take/${c.id}">Take</a> | 
-<a href="/accept/${c.id}">Accept</a> | 
-<a href="/reject/${c.id}">Reject</a>`
+
+? `
+
+<div class="actions">
+
+<a class="btn" href="/take/${c.id}">
+Take
+</a>
+
+<a class="btn" href="/accept/${c.id}">
+Accept
+</a>
+
+<a class="btn" href="/reject/${c.id}">
+Reject
+</a>
+
+</div>
+
+`
+
+: ""
+
+}
+
+</div>
+
+`;
+
+});
+
+res.send(`
+
+<html>
+<head>
+<title>Dashboard</title>
+${css}
+</head>
+<body>
+
+<div class="container">
+
+<div class="sidebar">
+
+<div class="logo">
+TeamPanel
+</div>
+
+<div class="nav">
+
+<a href="/dashboard">
+Dashboard
+</a>
+
+<a href="/create">
+Beschwerde
+</a>
+
+${
+req.session.user.role === "leitung"
+
+? `
+
+<a href="/setrole">
+Rollen
+</a>
+
+`
+
 : ""
 }
 
-</div>`;
-});
+<a href="/logout">
+Logout
+</a>
 
-res.send(`
-<h1>Dashboard (${req.session.user.role})</h1>
+</div>
 
-<a href="/create">Beschwerde erstellen</a>
-<br><br>
+</div>
 
-${html}
+<div class="content">
 
-<br><br>
+<div class="header">
 
-${req.session.user.role === "leitung"
-? `<a href="/setrole">Rollen vergeben</a>`
-: ""}
+<h1>
+Hallo, ${req.session.user.username}.
+</h1>
 
-<br><br>
-<a href="/logout">Logout</a>
+<p>
+Hier ist dein Überblick über das Panel.
+</p>
+
+</div>
+
+<div class="cards">
+${cards}
+</div>
+
+</div>
+
+</div>
+
+</body>
+</html>
+
 `);
+
 });
+
 });
 
 // ================= CREATE =================
-app.get("/create",auth,(req,res)=>{
+
+app.get("/create", auth, (req,res)=>{
+
 res.send(`
+
+<html>
+<head>
+<title>Create</title>
+${css}
+</head>
+<body>
+
+<div class="login-page">
+
+<div class="form-box">
+
+<h1 style="margin-bottom:30px;">
+Beschwerde erstellen
+</h1>
+
 <form method="POST">
-<input name="title" placeholder="Titel"><br>
-<input name="target_user" placeholder="Gegen wen"><br>
-<textarea name="description"></textarea><br>
-<button>Senden</button>
+
+<input
+class="input"
+name="title"
+placeholder="Titel"
+required
+>
+
+<input
+class="input"
+name="target_user"
+placeholder="Gegen wen"
+required
+>
+
+<textarea
+class="input"
+name="description"
+placeholder="Beschreibung"
+required
+></textarea>
+
+<button class="btn full">
+Senden
+</button>
+
 </form>
+
+</div>
+
+</div>
+
+</body>
+</html>
+
 `);
+
 });
 
-app.post("/create",auth,(req,res)=>{
+app.post("/create", auth, (req,res)=>{
+
 db.query(
 "INSERT INTO complaints (user_id,title,description,target_user) VALUES (?,?,?,?)",
-[req.session.user.id,req.body.title,req.body.description,req.body.target_user]
+[
+req.session.user.id,
+req.body.title,
+req.body.description,
+req.body.target_user
+]
 );
 
 res.redirect("/dashboard");
+
 });
 
 // ================= ACTIONS =================
-app.get("/take/:id",auth,(req,res)=>{
-if(req.session.user.role === "member") return res.send("No");
 
-db.query("UPDATE complaints SET taken_by=? WHERE id=?",
-[req.session.user.username,req.params.id]);
+app.get("/take/:id", auth, (req,res)=>{
+
+if(req.session.user.role === "member")
+return res.send("Keine Rechte");
+
+db.query(
+"UPDATE complaints SET taken_by=? WHERE id=?",
+[
+req.session.user.username,
+req.params.id
+]
+);
 
 res.redirect("/dashboard");
+
 });
 
-app.get("/accept/:id",auth,(req,res)=>{
-if(req.session.user.role === "member") return res.send("No");
+app.get("/accept/:id", auth, (req,res)=>{
 
-db.query("UPDATE complaints SET status='angenommen' WHERE id=?",[req.params.id]);
+if(req.session.user.role === "member")
+return res.send("Keine Rechte");
+
+db.query(
+"UPDATE complaints SET status='angenommen' WHERE id=?",
+[req.params.id]
+);
+
 res.redirect("/dashboard");
+
 });
 
-app.get("/reject/:id",auth,(req,res)=>{
-if(req.session.user.role === "member") return res.send("No");
+app.get("/reject/:id", auth, (req,res)=>{
 
-db.query("UPDATE complaints SET status='abgelehnt' WHERE id=?",[req.params.id]);
+if(req.session.user.role === "member")
+return res.send("Keine Rechte");
+
+db.query(
+"UPDATE complaints SET status='abgelehnt' WHERE id=?",
+[req.params.id]
+);
+
 res.redirect("/dashboard");
+
 });
 
-// ================= ROLE SYSTEM =================
-app.get("/setrole",auth,(req,res)=>{
+// ================= ROLE =================
+
+app.get("/setrole", auth, (req,res)=>{
+
 if(req.session.user.role !== "leitung")
-return res.send("No rights");
+return res.send("Keine Rechte");
 
 res.send(`
+
+<html>
+<head>
+<title>Roles</title>
+${css}
+</head>
+<body>
+
+<div class="login-page">
+
+<div class="form-box">
+
+<h1 style="margin-bottom:30px;">
+Rolle vergeben
+</h1>
+
 <form method="POST">
-<input name="discord_id" placeholder="Discord ID"><br>
-<select name="role">
+
+<input
+class="input"
+name="discord_id"
+placeholder="Discord ID"
+required
+>
+
+<select class="input" name="role">
+
 <option>member</option>
 <option>konfliktmanager</option>
 <option>leitung</option>
-</select><br>
-<button>Set</button>
+
+</select>
+
+<button class="btn full">
+Speichern
+</button>
+
 </form>
+
+</div>
+
+</div>
+
+</body>
+</html>
+
 `);
+
 });
 
-app.post("/setrole",auth,(req,res)=>{
+app.post("/setrole", auth, (req,res)=>{
+
 if(req.session.user.role !== "leitung")
-return res.send("No rights");
+return res.send("Keine Rechte");
 
 db.query(
 "UPDATE users SET role=? WHERE discord_id=?",
-[req.body.role,req.body.discord_id]
+[
+req.body.role,
+req.body.discord_id
+]
 );
 
-res.send("Role updated");
+res.redirect("/dashboard");
+
 });
 
 // ================= LOGOUT =================
+
 app.get("/logout",(req,res)=>{
-req.session.destroy(()=>res.redirect("/"));
+
+req.session.destroy(()=>{
+res.redirect("/");
+});
+
 });
 
 // ================= START =================
-app.listen(PORT,()=>console.log("Server läuft auf "+PORT));
+
+app.listen(PORT,()=>{
+console.log("Server läuft auf Port "+PORT);
+});
