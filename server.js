@@ -123,14 +123,14 @@ res.redirect(url);
 
 /* ================= CALLBACK (FAST + NO HANG) ================= */
 
-app.get("/callback", async (req,res)=>{
+app.get("/callback", async (req, res) => {
 
 const code = req.query.code;
-if(!code) return res.send("No Code");
+if (!code) return res.send("No Code");
 
 try {
 
-// STEP 1 TOKEN
+// 1. TOKEN
 const token = await axios.post(
 "https://discord.com/api/oauth2/token",
 new URLSearchParams({
@@ -143,7 +143,7 @@ redirect_uri: REDIRECT_URI
 { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
 );
 
-// STEP 2 USER
+// 2. USER
 const userRes = await axios.get(
 "https://discord.com/api/users/@me",
 {
@@ -155,46 +155,39 @@ Authorization: `Bearer ${token.data.access_token}`
 
 const user = userRes.data;
 
-// STEP 3 DB INSERT (ASYNC SAFE)
+// 3. DB INSERT (ASYNC - NICHT BLOCKIEREND)
 db.query(
 "INSERT IGNORE INTO users (discord_id, username, avatar) VALUES (?,?,?)",
 [user.id, user.username, user.avatar]
 );
 
-// STEP 4 ROLE
+// 4. ROLE FIX (KEIN COUNT, KEIN STRESS)
 db.query(
 "SELECT role FROM users WHERE discord_id=?",
 [user.id],
 (err, rows) => {
 
-let role = rows?.[0]?.role || "member";
-
-// FIRST USER = LEITUNG
-db.query("SELECT COUNT(*) AS c FROM users", (e2, r2) => {
-
-if (r2[0].c === 1) role = "leitung";
+const role = rows?.[0]?.role || "member";
 
 db.query(
 "UPDATE users SET role=? WHERE discord_id=?",
 [role, user.id]
 );
 
+// 🔥 WICHTIG: SOFORT REDIRECT (KEIN WAITEN!)
 req.session.user = {
 id: user.id,
 username: user.username,
 role
 };
 
-// IMPORTANT: FAST RESPONSE
 return res.redirect("/dashboard");
 
 });
 
-});
-
-} catch(err){
+} catch (err) {
 console.log("LOGIN ERROR:", err.response?.data || err);
-res.send("Login Fehler (check logs)");
+return res.send("Login Fehler");
 }
 
 });
