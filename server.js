@@ -13,8 +13,8 @@ process.on("uncaughtException", (err) => {
 
 /* ================= DISCORD CONFIG ================= */
 
-const CLIENT_ID = "DEIN_CLIENT_ID";
-const CLIENT_SECRET = "DEIN_CLIENT_SECRET";
+const CLIENT_ID = "1455173278376136788";
+const CLIENT_SECRET = "U3iGnMV0TcVqiBvWmf1GNzGybg-aXiqd";
 const REDIRECT_URI = "https://beschwerde-panel.onrender.com/callback";
 
 /* ================= MIDDLEWARE ================= */
@@ -32,7 +32,7 @@ app.use(session({
 const db = mysql.createPool({
     host: "yamanote.proxy.rlwy.net",
     user: "root",
-    password: "DEIN_RAILWAY_PASS",
+    password: "TcZJFNCVixAGMPRydyYXaLLHgmbICDBN",
     database: "railway",
     port: 3306,
     waitForConnections: true,
