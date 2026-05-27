@@ -362,16 +362,20 @@ app.get("/callback", async (req,res)=>{
 
 const code = req.query.code;
 
+if(!code){
+return res.send("Kein Code erhalten");
+}
+
 try {
 
-const token = await axios.post(
+const tokenRes = await axios.post(
 "https://discord.com/api/oauth2/token",
 
 new URLSearchParams({
 client_id: CLIENT_ID,
 client_secret: CLIENT_SECRET,
-grant_type:"authorization_code",
-code,
+grant_type: "authorization_code",
+code: code,
 redirect_uri: REDIRECT_URI
 }),
 
@@ -382,48 +386,72 @@ headers:{
 }
 );
 
+const access_token = tokenRes.data.access_token;
+
+if(!access_token){
+console.log(tokenRes.data);
+return res.send("Kein Access Token");
+}
+
 const userRes = await axios.get(
 "https://discord.com/api/users/@me",
 {
 headers:{
-Authorization:`Bearer ${token.data.access_token}`
+Authorization:`Bearer ${access_token}`
 }
 }
 );
 
 const user = userRes.data;
 
-// USER SAVE
+console.log(user);
+
+// USER SPEICHERN
 
 db.query(
 "INSERT IGNORE INTO users (discord_id,username,avatar) VALUES (?,?,?)",
-[user.id,user.username,user.avatar]
-);
+[
+user.id,
+user.username,
+user.avatar
+],
+(err)=>{
 
-// FIRST USER = LEITUNG
+if(err){
+console.log(err);
+return res.send("DB Fehler");
+}
 
-db.query("SELECT * FROM users",(err,rows)=>{
+// USER ROLLE HOLEN
 
-if(rows.length === 1){
+db.query(
+"SELECT * FROM users WHERE discord_id=?",
+[user.id],
+
+(err2,rows)=>{
+
+if(err2){
+console.log(err2);
+return res.send("Role Fehler");
+}
+
+// ERSTER USER = LEITUNG
+
+if(rows.length > 0 && !rows[0].role){
 
 db.query(
 "UPDATE users SET role='leitung' WHERE discord_id=?",
 [user.id]
 );
 
+rows[0].role = "leitung";
 }
-
-db.query(
-"SELECT role FROM users WHERE discord_id=?",
-[user.id],
-
-(err2,roleRows)=>{
 
 req.session.user = {
 id:user.id,
 username:user.username,
 avatar:user.avatar,
-role:roleRows[0]?.role || "member"
+role:rows[0]?.role || "member"
 };
 
 res.redirect("/dashboard");
@@ -434,13 +462,18 @@ res.redirect("/dashboard");
 
 } catch(err){
 
-console.log(err);
-res.send("Login Fehler");
+console.log(err.response?.data || err);
+
+res.send(`
+<h1>Login Fehler</h1>
+<pre>
+${JSON.stringify(err.response?.data || err,null,2)}
+</pre>
+`);
 
 }
 
 });
-
 // ================= DASHBOARD =================
 
 app.get("/dashboard", auth, (req,res)=>{
