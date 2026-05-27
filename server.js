@@ -6,23 +6,23 @@ const mysql = require("mysql2");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ================= CONFIG =================
+// ================= DISCORD CONFIG =================
 
-const CLIENT_ID = "1508836298713206876"; 
-const CLIENT_SECRET = "_tvGiwdTngoNYt0jzVqrsCR-7mLGjN9A"; 
-const REDIRECT_URI = "https://beschwerde-panel.onrender.com/callback"; 
+const CLIENT_ID = "1508836298713206876";
+const CLIENT_SECRET = "_tvGiwdTngoNYt0jzVqrsCR-7mLGjN9A";
+const REDIRECT_URI = "https://DEINE-APP.onrender.com/callback";
 
 // ================= MIDDLEWARE =================
 
 app.use(express.urlencoded({ extended: true }));
 
 app.use(session({
-    secret: "secret",
+    secret: "supersecret",
     resave: false,
     saveUninitialized: false
 }));
 
-// ================= DATABASE =================
+// ================= MYSQL (RAILWAY) =================
 
 const db = mysql.createConnection({
     host: "yamanote.proxy.rlwy.net",
@@ -33,15 +33,11 @@ const db = mysql.createConnection({
 });
 
 db.connect(err => {
-    if (err) {
-        console.log("MYSQL FEHLER:");
-        console.log(err);
-    } else {
-        console.log("MYSQL VERBUNDEN");
-    }
+    if (err) console.log("MYSQL FEHLER:", err);
+    else console.log("MYSQL VERBUNDEN");
 });
 
-// ================= TABLES AUTO CREATE =================
+// ================= AUTO TABLES =================
 
 db.query(`
 CREATE TABLE IF NOT EXISTS users (
@@ -65,235 +61,240 @@ taken_by VARCHAR(255)
 
 // ================= AUTH =================
 
-function auth(req, res, next) {
-    if (!req.session.user) return res.redirect("/");
+function auth(req,res,next){
+    if(!req.session.user) return res.redirect("/");
     next();
 }
 
-// ================= LOGIN PAGE =================
+// ================= DESIGN =================
 
-app.get("/", (req, res) => {
-    res.send(`
-    <h1>Beschwerde Panel</h1>
-    <a href="/login">Mit Discord einloggen</a>
-    `);
+const css = `
+<style>
+body{margin:0;font-family:Arial;background:#0b1020;color:white;}
+
+.login{display:flex;justify-content:center;align-items:center;height:100vh;}
+.box{background:#111827;padding:40px;border-radius:18px;width:350px;text-align:center;border:1px solid #1f2a44;}
+
+.btn{display:inline-block;padding:12px 18px;background:#6d5dfc;color:white;border-radius:10px;text-decoration:none;margin-top:15px;}
+
+.container{display:flex;min-height:100vh;}
+
+.sidebar{width:220px;background:#111827;padding:20px;border-right:1px solid #1f2a44;}
+.sidebar a{display:block;color:white;text-decoration:none;padding:10px;border-radius:8px;margin-bottom:6px;}
+.sidebar a:hover{background:#6d5dfc;}
+
+.content{flex:1;padding:20px;}
+
+.card{background:#111827;padding:15px;margin:10px;border-radius:12px;border:1px solid #1f2a44;}
+
+.status{padding:5px 10px;border-radius:6px;display:inline-block;margin-top:8px;}
+.offen{background:#fbbf2420;color:#fbbf24;}
+.angenommen{background:#22c55e20;color:#22c55e;}
+.abgelehnt{background:#ef444420;color:#ef4444;}
+</style>
+`;
+
+// ================= HOME =================
+
+app.get("/", (req,res)=>{
+res.send(`
+<html><head>${css}</head><body>
+<div class="login">
+<div class="box">
+<h2>Beschwerde Panel</h2>
+<p>Login mit Discord</p>
+<a class="btn" href="/login">Login</a>
+</div>
+</div>
+</body></html>
+`);
 });
 
 // ================= LOGIN =================
 
-app.get("/login", (req, res) => {
-    const params = new URLSearchParams({
-        client_id: CLIENT_ID,
-        redirect_uri: REDIRECT_URI,
-        response_type: "code",
-        scope: "identify"
-    });
-
-    res.redirect("https://discord.com/oauth2/authorize?" + params);
+app.get("/login",(req,res)=>{
+const params = new URLSearchParams({
+client_id: CLIENT_ID,
+redirect_uri: REDIRECT_URI,
+response_type:"code",
+scope:"identify"
+});
+res.redirect("https://discord.com/oauth2/authorize?"+params);
 });
 
 // ================= CALLBACK =================
 
-app.get("/callback", async (req, res) => {
+app.get("/callback", async (req,res)=>{
 
-    const code = req.query.code;
+const code = req.query.code;
+if(!code) return res.send("No Code");
 
-    try {
+try {
 
-        const token = await axios.post(
-            "https://discord.com/api/oauth2/token",
-            new URLSearchParams({
-                client_id: CLIENT_ID,
-                client_secret: CLIENT_SECRET,
-                grant_type: "authorization_code",
-                code,
-                redirect_uri: REDIRECT_URI
-            }),
-            { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
-        );
+const tokenRes = await axios.post(
+"https://discord.com/api/oauth2/token",
+new URLSearchParams({
+client_id: CLIENT_ID,
+client_secret: CLIENT_SECRET,
+grant_type:"authorization_code",
+code,
+redirect_uri: REDIRECT_URI
+}),
+{headers:{"Content-Type":"application/x-www-form-urlencoded"}}
+);
 
-        const userRes = await axios.get(
-            "https://discord.com/api/users/@me",
-            { headers: { Authorization: `Bearer ${token.data.access_token}` } }
-        );
+const userRes = await axios.get(
+"https://discord.com/api/users/@me",
+{headers:{Authorization:`Bearer ${tokenRes.data.access_token}`}}
+);
 
-        const user = userRes.data;
+const user = userRes.data;
 
-        // ================= ROLE LOGIC =================
+// insert user
+db.query(
+"INSERT IGNORE INTO users (discord_id,username,avatar) VALUES (?,?,?)",
+[user.id,user.username,user.avatar]
+);
 
-        db.query("SELECT * FROM users", (err, rows) => {
+// role logic
+db.query("SELECT * FROM users",(err,rows)=>{
 
-            let role = "member";
+let role = "member";
+if(rows.length === 0) role = "leitung";
 
-            if (rows.length === 0) {
-                role = "leitung";
-            }
+db.query(
+"UPDATE users SET role=? WHERE discord_id=?",
+[role,user.id]
+);
 
-            db.query(
-                "INSERT IGNORE INTO users (discord_id, username, avatar, role) VALUES (?,?,?,?)",
-                [user.id, user.username, user.avatar, role],
-                (err2) => {
+req.session.user = {
+id:user.id,
+username:user.username,
+role:role
+};
 
-                    if (err2) {
-                        console.log(err2);
-                        return res.send("DB Fehler");
-                    }
+res.redirect("/dashboard");
 
-                    db.query(
-                        "SELECT role FROM users WHERE discord_id=?",
-                        [user.id],
-                        (err3, roleRows) => {
+});
 
-                            req.session.user = {
-                                id: user.id,
-                                username: user.username,
-                                avatar: user.avatar,
-                                role: roleRows[0].role
-                            };
+} catch(err){
+console.log(err.response?.data || err);
+res.send("Login Fehler");
+}
 
-                            res.redirect("/dashboard");
-
-                        }
-                    );
-
-                }
-            );
-
-        });
-
-    } catch (err) {
-        console.log(err.response?.data || err);
-        res.send("Login Fehler");
-    }
 });
 
 // ================= DASHBOARD =================
 
-app.get("/dashboard", auth, (req, res) => {
+app.get("/dashboard",auth,(req,res)=>{
 
-    let sql = "";
+db.query("SELECT * FROM complaints ORDER BY id DESC",(err,rows)=>{
 
-    if (req.session.user.role === "member") {
-        sql = `WHERE user_id='${req.session.user.id}'`;
-    }
+let html = "";
 
-    db.query("SELECT * FROM complaints " + sql + " ORDER BY id DESC", (err, rows) => {
+rows.forEach(c=>{
+html += `
+<div class="card">
+<h3>${c.title}</h3>
+<p>${c.description}</p>
+<p>Target: ${c.target_user}</p>
+<p>By: ${c.taken_by || "-"}</p>
 
-        let html = "";
+<div class="status ${c.status}">${c.status}</div>
+<br>
 
-        rows.forEach(c => {
+<a href="/take/${c.id}">Take</a> |
+<a href="/accept/${c.id}">Accept</a> |
+<a href="/reject/${c.id}">Reject</a>
+</div>
+`;
+});
 
-            html += `
-            <div style="background:#111827;padding:15px;margin:10px;border-radius:10px;">
-                <h3>${c.title}</h3>
-                <p>${c.description}</p>
-                <p>Status: ${c.status}</p>
-                <p>Target: ${c.target_user}</p>
-                <p>Bearbeitet von: ${c.taken_by || "niemand"}</p>
+res.send(`
+<html><head>${css}</head><body>
 
-                ${
-                    req.session.user.role !== "member"
-                    ? `
-                    <a href="/take/${c.id}">Take</a> |
-                    <a href="/accept/${c.id}">Accept</a> |
-                    <a href="/reject/${c.id}">Reject</a>
-                    `
-                    : ""
-                }
-            </div>
-            `;
+<div class="container">
 
-        });
+<div class="sidebar">
+<h3>Menu</h3>
+<a href="/dashboard">Dashboard</a>
+<a href="/create">Create</a>
+<a href="/logout">Logout</a>
+</div>
 
-        res.send(`
-        <h1>Dashboard (${req.session.user.role})</h1>
+<div class="content">
+<h1>Dashboard</h1>
+${html}
+</div>
 
-        <a href="/create">Beschwerde erstellen</a>
-        <br><br>
+</div>
 
-        ${html}
-
-        <br><br>
-        <a href="/logout">Logout</a>
-        `);
-
-    });
+</body></html>
+`);
+});
 
 });
 
 // ================= CREATE =================
 
-app.get("/create", auth, (req, res) => {
-    res.send(`
-    <form method="POST">
-        <input name="title" placeholder="Titel"><br>
-        <input name="target_user" placeholder="Gegen wen"><br>
-        <textarea name="description"></textarea><br>
-        <button>Senden</button>
-    </form>
-    `);
+app.get("/create",auth,(req,res)=>{
+res.send(`
+<html><head>${css}</head><body>
+
+<div class="login">
+<div class="box">
+<h2>Create Complaint</h2>
+
+<form method="POST">
+<input name="title" placeholder="Title"><br><br>
+<input name="target_user" placeholder="Target"><br><br>
+<textarea name="description"></textarea><br><br>
+<button class="btn">Send</button>
+</form>
+
+</div>
+</div>
+
+</body></html>
+`);
 });
 
-app.post("/create", auth, (req, res) => {
+app.post("/create",auth,(req,res)=>{
 
-    db.query(
-        "INSERT INTO complaints (user_id,title,description,target_user) VALUES (?,?,?,?)",
-        [req.session.user.id, req.body.title, req.body.description, req.body.target_user]
-    );
+db.query(
+"INSERT INTO complaints (user_id,title,description,target_user) VALUES (?,?,?,?)",
+[req.session.user.id,req.body.title,req.body.description,req.body.target_user]
+);
 
-    res.redirect("/dashboard");
+res.redirect("/dashboard");
 
 });
 
 // ================= ACTIONS =================
 
-app.get("/take/:id", auth, (req, res) => {
-
-    if (req.session.user.role === "member")
-        return res.send("No rights");
-
-    db.query(
-        "UPDATE complaints SET taken_by=? WHERE id=?",
-        [req.session.user.username, req.params.id]
-    );
-
-    res.redirect("/dashboard");
+app.get("/take/:id",auth,(req,res)=>{
+db.query("UPDATE complaints SET taken_by=? WHERE id=?",[req.session.user.username,req.params.id]);
+res.redirect("/dashboard");
 });
 
-app.get("/accept/:id", auth, (req, res) => {
-
-    if (req.session.user.role === "member")
-        return res.send("No rights");
-
-    db.query(
-        "UPDATE complaints SET status='angenommen' WHERE id=?",
-        [req.params.id]
-    );
-
-    res.redirect("/dashboard");
+app.get("/accept/:id",auth,(req,res)=>{
+db.query("UPDATE complaints SET status='angenommen' WHERE id=?",[req.params.id]);
+res.redirect("/dashboard");
 });
 
-app.get("/reject/:id", auth, (req, res) => {
-
-    if (req.session.user.role === "member")
-        return res.send("No rights");
-
-    db.query(
-        "UPDATE complaints SET status='abgelehnt' WHERE id=?",
-        [req.params.id]
-    );
-
-    res.redirect("/dashboard");
+app.get("/reject/:id",auth,(req,res)=>{
+db.query("UPDATE complaints SET status='abgelehnt' WHERE id=?",[req.params.id]);
+res.redirect("/dashboard");
 });
 
 // ================= LOGOUT =================
 
-app.get("/logout", (req, res) => {
-    req.session.destroy(() => res.redirect("/"));
+app.get("/logout",(req,res)=>{
+req.session.destroy(()=>res.redirect("/"));
 });
 
 // ================= START =================
 
-app.listen(PORT, () => {
-    console.log("Server läuft auf Port " + PORT);
+app.listen(PORT,()=>{
+console.log("Server läuft auf " + PORT);
 });
