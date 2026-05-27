@@ -30,11 +30,23 @@ const db = mysql.createConnection({
    password: "budQIQWw1u", 
    database: "if0_42025033_panel", 
    port: 3306 
+   ssl: {}
 });
 
 db.connect(err => {
     if (err) console.log(err);
     else console.log("DB connected");
+});
+
+db.connect(err => {
+
+if(err){
+console.log("MYSQL FEHLER:");
+console.log(err);
+} else {
+console.log("MYSQL VERBUNDEN");
+}
+
 });
 
 // ================= TABLES =================
