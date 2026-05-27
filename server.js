@@ -24,13 +24,13 @@ app.use(session({
 
 // ================= DB =================
 
-const db = mysql.createConnection({ 
-   host: "sql306.infinityfree.com",
-   user: "if0_42025033", 
-   password: "budQIQWw1u", 
-   database: "if0_42025033_panel", 
-   port: 3306 
-   ssl: {}
+const db = mysql.createConnection({
+    host: "sql306.infinityfree.com",
+    user: "if0_42025033",
+    password: "budQIQWw1u",
+    database: "if0_42025033_panel",
+    port: 3306,
+    ssl: {}
 });
 
 db.connect(err => {
