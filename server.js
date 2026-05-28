@@ -13,22 +13,9 @@ process.on("uncaughtException", (err) => {
 
 /* ================= DISCORD ================= */
 
-// 1. Timeout erhöhen in axios
-const tokenRes = await axios.post(
-    "https://discord.com/api/oauth2/token",
-    new URLSearchParams({...}),
-    { 
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        timeout: 10000  // 10 Sekunden
-    }
-);
-
-// 2. Oder Environment-Variablen nutzen statt hardcodiert
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID || "1455173278376136788";
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || "U3iGnMV0TcVqiBvWmf1GNzGybg-aXiqd";
 const REDIRECT_URI = process.env.REDIRECT_URI || "https://beschwerde-panel.onrender.com/callback";
-
-// 3. Oder zu einem einfacheren Discord-Login wechseln
 
 /* ================= MIDDLEWARE ================= */
 
@@ -177,25 +164,6 @@ body {
     background: #1f2a40;
 }
 
-.checkbox-group {
-    display: flex;
-    align-items: center;
-    margin-bottom: 24px;
-}
-
-.checkbox-group input[type="checkbox"] {
-    width: auto;
-    margin: 0;
-    margin-right: 8px;
-    cursor: pointer;
-}
-
-.checkbox-group label {
-    font-size: 13px;
-    color: #8b94a8;
-    cursor: pointer;
-}
-
 .btn {
     width: 100%;
     padding: 13px 16px;
@@ -229,13 +197,6 @@ body {
 .btn-secondary:hover {
     background: #1f2a40;
     border-color: #3a4a62;
-}
-
-.divider {
-    text-align: center;
-    margin: 24px 0;
-    color: #6b7280;
-    font-size: 13px;
 }
 
 .login-footer {
@@ -538,21 +499,19 @@ app.get("/", (req, res) => {
     <body>
     <div class="login-container">
         <div class="login-box">
-            <div class="login-logo">📚</div>
+            <div class="login-logo">📋</div>
             <h1>Willkommen zurück</h1>
-            <p>Melde dich an, um auf das NRW Team-Panel zuzugreifen.</p>
+            <p>Melde dich an, um auf das Beschwerde-Panel zuzugreifen.</p>
             
             <div class="login-form">
-                <a href="/login" class="btn btn-primary">🔑 Jetzt einloggen</a>
-                <div class="divider">oder</div>
-                <a href="/login" class="btn btn-secondary">💬 Discord Login</a>
+                <a href="/login" class="btn btn-primary">💬 Discord Login</a>
                 <div style="margin-top: 20px; text-align: left;">
                     <a href="#" style="color: #6d5dfc; font-size: 13px; text-decoration: none;">ℹ️ Infos zum Dashboard</a>
                 </div>
             </div>
             
             <div class="login-footer">
-                © 2026 NRW - Team Management
+                © 2026 - Beschwerde Panel
             </div>
         </div>
     </div>
@@ -585,7 +544,10 @@ app.get("/callback", async (req, res) => {
                 code,
                 redirect_uri: REDIRECT_URI
             }),
-            { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+            { 
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                timeout: 10000
+            }
         );
 
         console.log("👤 Benutzerdaten werden abgerufen...");
@@ -594,7 +556,8 @@ app.get("/callback", async (req, res) => {
             {
                 headers: {
                     Authorization: `Bearer ${tokenRes.data.access_token}`
-                }
+                },
+                timeout: 10000
             }
         );
 
@@ -674,8 +637,8 @@ app.get("/dashboard", auth, async (req, res) => {
         <div class="dashboard">
             <div class="sidebar">
                 <div class="sidebar-header">
-                    <div class="sidebar-logo">📚</div>
-                    <span>TeamPanel</span>
+                    <div class="sidebar-logo">📋</div>
+                    <span>Beschwerde Panel</span>
                 </div>
                 
                 <div class="nav-section">
