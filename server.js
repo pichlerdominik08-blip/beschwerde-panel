@@ -13,9 +13,22 @@ process.on("uncaughtException", (err) => {
 
 /* ================= DISCORD ================= */
 
-const CLIENT_ID = "1455173278376136788";
-const CLIENT_SECRET = "U3iGnMV0TcVqiBvWmf1GNzGybg-aXiqd";
-const REDIRECT_URI = "https://beschwerde-panel.onrender.com/callback";
+// 1. Timeout erhöhen in axios
+const tokenRes = await axios.post(
+    "https://discord.com/api/oauth2/token",
+    new URLSearchParams({...}),
+    { 
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        timeout: 10000  // 10 Sekunden
+    }
+);
+
+// 2. Oder Environment-Variablen nutzen statt hardcodiert
+const CLIENT_ID = process.env.DISCORD_CLIENT_ID || "1455173278376136788";
+const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || "U3iGnMV0TcVqiBvWmf1GNzGybg-aXiqd";
+const REDIRECT_URI = process.env.REDIRECT_URI || "https://beschwerde-panel.onrender.com/callback";
+
+// 3. Oder zu einem einfacheren Discord-Login wechseln
 
 /* ================= MIDDLEWARE ================= */
 
