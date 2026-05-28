@@ -2,9 +2,23 @@ const express = require("express");
 const session = require("express-session");
 const axios = require("axios");
 const mysql = require("mysql2/promise");
+const https = require("https");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+/* ================= AXIOS CONFIG ================= */
+const axiosInstance = axios.create({
+    timeout: 15000,
+    httpsAgent: new https.Agent({ 
+        keepAlive: true,
+        keepAliveMsecs: 1000,
+        maxSockets: 50,
+        maxFreeSockets: 10,
+        timeout: 15000,
+        freeSocketTimeout: 30000
+    })
+});
 
 /* ================= SAFETY ================= */
 process.on("uncaughtException", (err) => {
@@ -21,6 +35,10 @@ process.on("unhandledRejection", (err) => {
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID || "1455173278376136788";
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || "U3iGnMV0TcVqiBvWmf1GNzGybg-aXiqd";
 const REDIRECT_URI = process.env.REDIRECT_URI || "https://beschwerde-panel.onrender.com/callback";
+
+console.log("🔧 DISCORD CONFIG:");
+console.log("   Client ID:", CLIENT_ID);
+console.log("   Redirect URI:", REDIRECT_URI);
 
 /* ================= MIDDLEWARE ================= */
 
@@ -206,17 +224,6 @@ body {
 .btn-primary:hover {
     background: linear-gradient(135deg, #5a4fcc 0%, #4a3fbc 100%);
     transform: translateY(-2px);
-}
-
-.btn-secondary {
-    background: #1a2640;
-    color: #8b94a8;
-    border: 1px solid #2a3a52;
-}
-
-.btn-secondary:hover {
-    background: #1f2a40;
-    border-color: #3a4a62;
 }
 
 .login-footer {
@@ -478,20 +485,6 @@ body {
         width: 100%;
         border-right: none;
         border-bottom: 1px solid #1f2a44;
-        display: flex;
-        gap: 20px;
-        overflow-x: auto;
-        padding: 15px;
-    }
-
-    .nav-section {
-        display: flex;
-        gap: 10px;
-        margin: 0;
-    }
-
-    .nav-section-title {
-        display: none;
     }
 
     .cards-grid {
@@ -552,11 +545,22 @@ app.get("/login", (req, res) => {
 
 app.get("/callback", async (req, res) => {
     const code = req.query.code;
-    if (!code) return res.send("❌ Kein Code erhalten");
+    const error = req.query.error;
+
+    if (error) {
+        console.log("❌ Discord OAuth Error:", error);
+        return res.send(`❌ Discord OAuth Error: ${error}`);
+    }
+
+    if (!code) {
+        console.log("❌ Kein Code erhalten");
+        return res.send("❌ Kein Code erhalten");
+    }
 
     try {
-        console.log("🔐 Token wird angefordert...");
-        const tokenRes = await axios.post(
+        console.log("🔐 Token wird angefordert von Discord...");
+        
+        const tokenRes = await axiosInstance.post(
             "https://discord.com/api/oauth2/token",
             new URLSearchParams({
                 client_id: CLIENT_ID,
@@ -566,19 +570,19 @@ app.get("/callback", async (req, res) => {
                 redirect_uri: REDIRECT_URI
             }),
             { 
-                headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                timeout: 10000
+                headers: { "Content-Type": "application/x-www-form-urlencoded" }
             }
         );
 
+        console.log("✅ Token erhalten");
         console.log("👤 Benutzerdaten werden abgerufen...");
-        const userRes = await axios.get(
+
+        const userRes = await axiosInstance.get(
             "https://discord.com/api/users/@me",
             {
                 headers: {
                     Authorization: `Bearer ${tokenRes.data.access_token}`
-                },
-                timeout: 10000
+                }
             }
         );
 
@@ -587,7 +591,7 @@ app.get("/callback", async (req, res) => {
 
         if (!pool) {
             console.log("❌ Datenbankverbindung nicht verfügbar");
-            return res.send("❌ Datenbankfehler");
+            return res.send("❌ Datenbankfehler - Bitte später versuchen");
         }
 
         const connection = await pool.getConnection();
@@ -619,8 +623,16 @@ app.get("/callback", async (req, res) => {
         }
 
     } catch (err) {
-        console.log("❌ LOGIN ERROR:", err.message);
-        return res.send("❌ Login Fehler: " + err.message);
+        console.log("❌ LOGIN ERROR:", err.code, err.message);
+        
+        let errorMsg = "Login fehlgeschlagen";
+        if (err.code === "ETIMEDOUT" || err.code === "ECONNREFUSED") {
+            errorMsg = "Netzwerkfehler - Kann Discord nicht erreichen";
+        } else if (err.response?.status === 401) {
+            errorMsg = "Ungültige Discord Credentials";
+        }
+
+        return res.send(`❌ ${errorMsg}: ${err.message}`);
     }
 });
 
@@ -873,10 +885,7 @@ app.get("/files", auth, (req, res) => {
 /* ================= ACTIONS ================= */
 
 app.get("/take/:id", auth, async (req, res) => {
-    if (!pool) {
-        return res.send("❌ Datenbankfehler");
-    }
-
+    if (!pool) return res.send("❌ Datenbankfehler");
     const connection = await pool.getConnection();
     try {
         await connection.query("UPDATE complaints SET taken_by=? WHERE id=?", [req.session.user.username, req.params.id]);
@@ -891,10 +900,7 @@ app.get("/take/:id", auth, async (req, res) => {
 });
 
 app.get("/accept/:id", auth, async (req, res) => {
-    if (!pool) {
-        return res.send("❌ Datenbankfehler");
-    }
-
+    if (!pool) return res.send("❌ Datenbankfehler");
     const connection = await pool.getConnection();
     try {
         await connection.query("UPDATE complaints SET status='angenommen' WHERE id=?", [req.params.id]);
@@ -909,10 +915,7 @@ app.get("/accept/:id", auth, async (req, res) => {
 });
 
 app.get("/reject/:id", auth, async (req, res) => {
-    if (!pool) {
-        return res.send("❌ Datenbankfehler");
-    }
-
+    if (!pool) return res.send("❌ Datenbankfehler");
     const connection = await pool.getConnection();
     try {
         await connection.query("UPDATE complaints SET status='abgelehnt' WHERE id=?", [req.params.id]);
