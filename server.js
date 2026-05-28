@@ -9,6 +9,11 @@ const PORT = process.env.PORT || 3000;
 /* ================= SAFETY ================= */
 process.on("uncaughtException", (err) => {
     console.log("CRASH:", err);
+    process.exit(1);
+});
+
+process.on("unhandledRejection", (err) => {
+    console.log("UNHANDLED REJECTION:", err);
 });
 
 /* ================= DISCORD ================= */
@@ -30,19 +35,34 @@ app.use(session({
 
 /* ================= MYSQL POOL ================= */
 
-const pool = mysql.createPool({
-    host: "yamanote.proxy.rlwy.net",
-    user: "root",
-    password: "TcZJFNCVixAGMPRydyYXaLLHgmbICDBN",
-    database: "railway",
-    port: 3306,
-    waitForConnections: true,
-    connectionLimit: 10
-});
+let pool;
 
-/* ================= TABLES ================= */
+async function initDatabase() {
+    try {
+        pool = mysql.createPool({
+            host: process.env.DB_HOST || "yamanote.proxy.rlwy.net",
+            user: process.env.DB_USER || "root",
+            password: process.env.DB_PASSWORD || "TcZJFNCVixAGMPRydyYXaLLHgmbICDBN",
+            database: process.env.DB_NAME || "railway",
+            port: process.env.DB_PORT || 3306,
+            waitForConnections: true,
+            connectionLimit: 10,
+            queueLimit: 0,
+            enableKeepAlive: true,
+            keepAliveInitialDelayMs: 0,
+            connectionTimeout: 10000
+        });
+
+        console.log("✅ MySQL Pool erstellt");
+        await initTables();
+    } catch (err) {
+        console.log("❌ Datenbankverbindung fehlgeschlagen:", err.message);
+        setTimeout(initDatabase, 5000);
+    }
+}
 
 async function initTables() {
+    if (!pool) return;
     const connection = await pool.getConnection();
     try {
         await connection.query(`
@@ -69,13 +89,13 @@ async function initTables() {
 
         console.log("✅ Tabellen erfolgreich erstellt");
     } catch (err) {
-        console.log("❌ Fehler beim Erstellen der Tabellen:", err);
+        console.log("❌ Fehler beim Erstellen der Tabellen:", err.message);
     } finally {
         connection.release();
     }
 }
 
-initTables();
+initDatabase();
 
 /* ================= AUTH ================= */
 
@@ -494,6 +514,7 @@ app.get("/", (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Beschwerde Panel - Login</title>
         ${css}
     </head>
     <body>
@@ -564,11 +585,16 @@ app.get("/callback", async (req, res) => {
         const user = userRes.data;
         console.log(`✅ Benutzer angemeldet: ${user.username} (${user.id})`);
 
+        if (!pool) {
+            console.log("❌ Datenbankverbindung nicht verfügbar");
+            return res.send("❌ Datenbankfehler");
+        }
+
         const connection = await pool.getConnection();
         try {
             await connection.query(
                 "INSERT IGNORE INTO users (discord_id, username, avatar, role) VALUES (?, ?, ?, 'member')",
-                [user.id, user.username, user.avatar]
+                [user.id, user.username, user.avatar || ""]
             );
 
             const [rows] = await connection.query(
@@ -593,14 +619,18 @@ app.get("/callback", async (req, res) => {
         }
 
     } catch (err) {
-        console.log("❌ LOGIN ERROR:", err.response?.data || err.message);
-        return res.send("❌ Login Fehler: " + (err.response?.data?.error || err.message));
+        console.log("❌ LOGIN ERROR:", err.message);
+        return res.send("❌ Login Fehler: " + err.message);
     }
 });
 
 /* ================= DASHBOARD ================= */
 
 app.get("/dashboard", auth, async (req, res) => {
+    if (!pool) {
+        return res.send("❌ Datenbankfehler");
+    }
+
     const connection = await pool.getConnection();
     try {
         const [complaints] = await connection.query("SELECT * FROM complaints ORDER BY id DESC");
@@ -631,6 +661,7 @@ app.get("/dashboard", auth, async (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Dashboard - Beschwerde Panel</title>
             ${css}
         </head>
         <body>
@@ -684,7 +715,7 @@ app.get("/dashboard", auth, async (req, res) => {
         </html>
         `);
     } catch (err) {
-        console.log("❌ Dashboard Fehler:", err);
+        console.log("❌ Dashboard Fehler:", err.message);
         res.send("❌ Fehler beim Laden des Dashboards");
     } finally {
         connection.release();
@@ -700,6 +731,7 @@ app.get("/create", auth, (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Neue Beschwerde - Beschwerde Panel</title>
         ${css}
     </head>
     <body>
@@ -725,6 +757,10 @@ app.get("/create", auth, (req, res) => {
 });
 
 app.post("/create", auth, async (req, res) => {
+    if (!pool) {
+        return res.send("❌ Datenbankfehler");
+    }
+
     const connection = await pool.getConnection();
     try {
         await connection.query(
@@ -734,7 +770,7 @@ app.post("/create", auth, async (req, res) => {
         console.log(`✅ Beschwerde erstellt von ${req.session.user.username}`);
         res.redirect("/dashboard");
     } catch (err) {
-        console.log("❌ Fehler beim Erstellen der Beschwerde:", err);
+        console.log("❌ Fehler beim Erstellen der Beschwerde:", err.message);
         res.send("❌ Fehler beim Erstellen der Beschwerde");
     } finally {
         connection.release();
@@ -750,6 +786,7 @@ app.get("/files", auth, (req, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>File Manager - Beschwerde Panel</title>
         ${css}
     </head>
     <body>
@@ -836,13 +873,17 @@ app.get("/files", auth, (req, res) => {
 /* ================= ACTIONS ================= */
 
 app.get("/take/:id", auth, async (req, res) => {
+    if (!pool) {
+        return res.send("❌ Datenbankfehler");
+    }
+
     const connection = await pool.getConnection();
     try {
         await connection.query("UPDATE complaints SET taken_by=? WHERE id=?", [req.session.user.username, req.params.id]);
         console.log(`✅ Beschwerde ${req.params.id} von ${req.session.user.username} übernommen`);
         res.redirect("/dashboard");
     } catch (err) {
-        console.log("❌ Fehler beim Übernehmen:", err);
+        console.log("❌ Fehler beim Übernehmen:", err.message);
         res.send("❌ Fehler");
     } finally {
         connection.release();
@@ -850,13 +891,17 @@ app.get("/take/:id", auth, async (req, res) => {
 });
 
 app.get("/accept/:id", auth, async (req, res) => {
+    if (!pool) {
+        return res.send("❌ Datenbankfehler");
+    }
+
     const connection = await pool.getConnection();
     try {
         await connection.query("UPDATE complaints SET status='angenommen' WHERE id=?", [req.params.id]);
         console.log(`✅ Beschwerde ${req.params.id} angenommen`);
         res.redirect("/dashboard");
     } catch (err) {
-        console.log("❌ Fehler beim Akzeptieren:", err);
+        console.log("❌ Fehler beim Akzeptieren:", err.message);
         res.send("❌ Fehler");
     } finally {
         connection.release();
@@ -864,13 +909,17 @@ app.get("/accept/:id", auth, async (req, res) => {
 });
 
 app.get("/reject/:id", auth, async (req, res) => {
+    if (!pool) {
+        return res.send("❌ Datenbankfehler");
+    }
+
     const connection = await pool.getConnection();
     try {
         await connection.query("UPDATE complaints SET status='abgelehnt' WHERE id=?", [req.params.id]);
         console.log(`✅ Beschwerde ${req.params.id} abgelehnt`);
         res.redirect("/dashboard");
     } catch (err) {
-        console.log("❌ Fehler beim Ablehnen:", err);
+        console.log("❌ Fehler beim Ablehnen:", err.message);
         res.send("❌ Fehler");
     } finally {
         connection.release();
@@ -888,4 +937,3 @@ app.get("/logout", (req, res) => {
 app.listen(PORT, () => {
     console.log("✅ Server läuft auf Port " + PORT);
 });
-
